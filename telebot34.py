@@ -35,84 +35,81 @@ def start(message):
         render_initial_keyboard(user_id)
 
 
-    
 @bot.callback_query_handler(func=lambda call: call.data.startswith("plan_"))
 def callback_worker2(call):
     user_id = call.from_user.id
     if call.data == "plan_yes":
-        now=datetime.strptime("24.08.2021", "%d.%m.%Y")
-        wnow=now.strftime( "%d.%m.%Y")
-        myDict={}
+        now = datetime.now()
+        wnow = now.strftime("%d.%m.%Y")
+        myDict = {}
         csv_dir = os.path.join("test_files", "csv")
-        file_path = os.path.join(csv_dir, "employ.csv")
+        file_path = os.path.join(csv_dir, "employ2.csv")
 
         with open(file_path) as csv_file:
             csv_reader = csv.DictReader(csv_file)
             for row in csv_reader:
-                myDict=row
-        
-        if wnow== myDict["date"]:
-            bot.send_message(user_id,(myDict["action"]))
+                myDict = row
+        actdate = myDict["date"]
+        actdatee=datetime.strptime(actdate,("%d.%m.%Y"))
+        actiondate=actdatee.strftime("%d.%m.%Y")
+
+        if wnow == actiondate:
+            bot.send_message(user_id, (myDict["action"]))
         else:
             bot.send_message(user_id, "На сегодня планов нет!")
             users.pop(user_id, None)
             render_initial_keyboard(user_id)
-            
-            
-        
-        
-        
-    
+
+
+
+
+
+
 
     elif call.data == "plan_no":
         # remove user
         users.pop(user_id, None)
         render_initial_keyboard(user_id)
-    
-    
+
+
 def get_action(message):
     user_id = message.from_user.id
-    action=message.text
+    action = message.text
     if is_valid_name_surname_action(action):
         users[user_id]["action"] = action.title()
         bot.send_message(user_id, "на какую дату планируем?")
         bot.register_next_step_handler(message, get_date)
-        
+
     else:
         bot.send_message(user_id, "Введите корректное действие")
         bot.register_next_step_handler(message, get_action)
 
+
 def get_date(message):
     user_id = message.from_user.id
-   
+
     today = datetime.now()
-    
+
     try:
-       date = datetime.strptime(message .text, "%d.%m.%Y")
-       formdate=date.strftime("%d.%m.%Y")
-    except ( ValueError) :
-       bot.send_message(user_id, "Введите корректную дату")
-       bot.register_next_step_handler(message, get_date)
-    
-    if date>today:
-        action=users[user_id]["action"] 
-        users[user_id]["date"]=formdate
-            
-        question = f"Ты бы хотел запланировать это действие {action} на эту дату {formdate}?"
-        render_yes_now_keyboard(user_id, question, "regg")
-   
-        
-    
-    else :
+        date = datetime.strptime(message.text, "%d.%m.%Y")
+        formdate = date.strftime("%d.%m.%Y")
+        ftoday = today.strftime("%d.%m.%Y")
+    except (ValueError):
         bot.send_message(user_id, "Введите корректную дату")
         bot.register_next_step_handler(message, get_date)
-         
-   
-   
-            
-            
-   
-   
+
+    if formdate >= ftoday:
+        action = users[user_id]["action"]
+        users[user_id]["date"] = formdate
+
+        question = f"Ты бы хотел запланировать это действие {action} на эту дату {formdate}?"
+        render_yes_now_keyboard(user_id, question, "regg")
+
+
+
+    else:
+        bot.send_message(user_id, "Введите корректную дату")
+        bot.register_next_step_handler(message, get_date)
 
 
 def get_name(message):
@@ -122,7 +119,7 @@ def get_name(message):
         users[user_id]["name"] = name.title()
         bot.send_message(user_id, "Какая у тебя фамилия?")
         bot.register_next_step_handler(message, get_surname)
-        
+
     else:
         bot.send_message(user_id, "Введите корректное имя")
         bot.register_next_step_handler(message, get_name)
@@ -166,27 +163,29 @@ def callback_worker(call):
         bot.send_message(user_id, "Спасибо, я запомню!")
         # pretend that we save in database
         csv_dir = os.path.join("test_files", "csv")
-        file_path = os.path.join(csv_dir, "employeess12231.csv")
-
+        file_path = os.path.join(csv_dir, "employ2.csv")
+        first_id = False
         if not os.path.exists(csv_dir):
             os.makedirs(csv_dir)
+            first_id = True
 
         with open(file_path, "a") as csv_file:
-            names = ["id", "name", "surname","age"]
+            names = ["id", "name", "surname", "age"]
             writer = csv.DictWriter(csv_file, fieldnames=names)
             # записываем заголовок
-            writer.writeheader()
-            writer.writerow({"id": user_id, "name": users[user_id]["name"], "surname": users[user_id]["surname"], "age": users[user_id]["age"] })
-       
-    
+            if first_id == True:
+                writer.writeheader()
+        writer.writerow({"id": user_id, "name": users[user_id]["name"], "surname": users[user_id]["surname"],
+                         "age": users[user_id]["age"]})
 
         with open(file_path) as f:
-           print(f.read())
+            print(f.read())
     elif call.data == "reg_no":
         # remove user
         users.pop(user_id, None)
         render_initial_keyboard(user_id)
-        
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("regg_"))
 def callback_worker1(call):
     user_id = call.from_user.id
@@ -194,19 +193,20 @@ def callback_worker1(call):
         bot.send_message(user_id, "Спасибо, я запомню!")
         # pretend that we save in database
         csv_dir = os.path.join("test_files", "csv")
-        file_path = os.path.join(csv_dir, "employ.csv")
-
+        file_path = os.path.join(csv_dir, "employ2.csv")
+        first_id = False
         if not os.path.exists(csv_dir):
             os.makedirs(csv_dir)
+            first_id = True
         with open(file_path, "a") as csv_file:
-            names1=["id","action","date"]
+            names1 = ["id", "action", "date"]
             writer1 = csv.DictWriter(csv_file, fieldnames=names1)
-            writer1.writeheader()
-            writer1.writerow({"id": user_id,"action": users[user_id]["action"],"date": users[user_id]["date"] })
-    
+            if first_id == True:
+                writer1.writeheader()
+            writer1.writerow({"id": user_id, "action": users[user_id]["action"], "date": users[user_id]["date"]})
 
         with open(file_path) as f:
-           print(f.read())
+            print(f.read())
     elif call.data == "regg_no":
         # remove user
         users.pop(user_id, None)
@@ -220,10 +220,6 @@ def render_yes_now_keyboard(user_id: int, question: str, prefix: str):
     key_no = types.InlineKeyboardButton(text="Нет", callback_data=f"{prefix}_no")
     keyboard.add(key_no)
     bot.send_message(user_id, text=question, reply_markup=keyboard)
-   
-        
-        
-        
 
 
 def render_initial_keyboard(user_id: int):
@@ -242,5 +238,3 @@ def remove_initial_keyboard(user_id: int, message: str):
 
 if __name__ == "__main__":
     bot.polling(none_stop=True)
-
-
