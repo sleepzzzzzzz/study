@@ -1,13 +1,13 @@
+import os
+import csv
 import telebot
 from telebot import types
-import csv
-import os
 from datetime import datetime
 
 API_TOKEN = ""
 
 bot = telebot.TeleBot(API_TOKEN)
-
+DATE_FORMAT = "%d.%m.%Y"
 users = {}
 
 
@@ -41,30 +41,33 @@ def callback_worker2(call):
     if call.data == "plan_yes":
         now = datetime.now()
         wnow = now.strftime("%d.%m.%Y")
-        myDict = {}
+        user_actions = []
         csv_dir = os.path.join("test_files", "csv")
-        file_path = os.path.join(csv_dir, "employ2.csv")
+        file_path = os.path.join(csv_dir, "employ6.csv")
 
         with open(file_path) as csv_file:
             csv_reader = csv.DictReader(csv_file)
             for row in csv_reader:
-                myDict = row
-        actdate = myDict["date"]
-        actdatee=datetime.strptime(actdate,("%d.%m.%Y"))
-        actiondate=actdatee.strftime("%d.%m.%Y")
+                if not row["id"] == str(user_id):
+                    continue
+                actdate = row["date"]
+                actdatee = datetime.strptime(actdate, "%d.%m.%Y")
+                actiondate = actdatee.strftime("%d.%m.%Y")
+                if wnow == actiondate:
+                    user_actions.append(row["action"])
 
-        if wnow == actiondate:
-            bot.send_message(user_id, (myDict["action"]))
-        else:
+        if not user_actions:
+
             bot.send_message(user_id, "На сегодня планов нет!")
-            users.pop(user_id, None)
+
+        else:
+            enumerated_actions = []
+            for index, action in enumerate(user_actions, start=1):
+                enumerated_actions.append(f'{index}. {action};')
+            message = "Привет,твои задачи на сегодня: \n"
+            actions = "\n".join(enumerated_actions)
+            bot.send_message(user_id, f'{message}{actions}')
             render_initial_keyboard(user_id)
-
-
-
-
-
-
 
     elif call.data == "plan_no":
         # remove user
@@ -92,20 +95,21 @@ def get_date(message):
 
     try:
         date = datetime.strptime(message.text, "%d.%m.%Y")
-        formdate = date.strftime("%d.%m.%Y")
+
         ftoday = today.strftime("%d.%m.%Y")
-    except (ValueError):
+        formtoday = datetime.strptime(ftoday, "%d.%m.%Y")
+
+    except(ValueError, TypeError):
         bot.send_message(user_id, "Введите корректную дату")
         bot.register_next_step_handler(message, get_date)
 
-    if formdate >= ftoday:
+    if date >= formtoday:
+        fdate = date.strftime("%d.%m.%Y")
         action = users[user_id]["action"]
-        users[user_id]["date"] = formdate
+        users[user_id]["date"] = fdate
 
-        question = f"Ты бы хотел запланировать это действие {action} на эту дату {formdate}?"
+        question = f"Ты бы хотел запланировать это действие {action} на эту дату {fdate}?"
         render_yes_now_keyboard(user_id, question, "regg")
-
-
 
     else:
         bot.send_message(user_id, "Введите корректную дату")
@@ -163,20 +167,19 @@ def callback_worker(call):
         bot.send_message(user_id, "Спасибо, я запомню!")
         # pretend that we save in database
         csv_dir = os.path.join("test_files", "csv")
-        file_path = os.path.join(csv_dir, "employ2.csv")
-        first_id = False
+        file_path = os.path.join(csv_dir, "employ6.csv")
+        first_id = not os.path.exists(csv_dir)
         if not os.path.exists(csv_dir):
             os.makedirs(csv_dir)
-            first_id = True
 
         with open(file_path, "a") as csv_file:
             names = ["id", "name", "surname", "age"]
             writer = csv.DictWriter(csv_file, fieldnames=names)
             # записываем заголовок
-            if first_id == True:
+            if first_id:
                 writer.writeheader()
-        writer.writerow({"id": user_id, "name": users[user_id]["name"], "surname": users[user_id]["surname"],
-                         "age": users[user_id]["age"]})
+            writer.writerow({"id": user_id, "name": users[user_id]["name"], "surname": users[user_id]["surname"],
+                             "age": users[user_id]["age"]})
 
         with open(file_path) as f:
             print(f.read())
@@ -193,22 +196,21 @@ def callback_worker1(call):
         bot.send_message(user_id, "Спасибо, я запомню!")
         # pretend that we save in database
         csv_dir = os.path.join("test_files", "csv")
-        file_path = os.path.join(csv_dir, "employ2.csv")
-        first_id = False
+        file_path = os.path.join(csv_dir, "employ6.csv")
+        first_id = not os.path.exists(csv_dir)
         if not os.path.exists(csv_dir):
             os.makedirs(csv_dir)
-            first_id = True
+
         with open(file_path, "a") as csv_file:
             names1 = ["id", "action", "date"]
             writer1 = csv.DictWriter(csv_file, fieldnames=names1)
-            if first_id == True:
+            if first_id:
                 writer1.writeheader()
             writer1.writerow({"id": user_id, "action": users[user_id]["action"], "date": users[user_id]["date"]})
 
         with open(file_path) as f:
             print(f.read())
     elif call.data == "regg_no":
-        # remove user
         users.pop(user_id, None)
         render_initial_keyboard(user_id)
 
