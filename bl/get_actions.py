@@ -1,8 +1,10 @@
 import csv
 import os
+import sqlite3
 from datetime import datetime
 
 from bl.constants import DATE_FORMAT
+
 
 
 def get_today_actions(user_id):
@@ -11,6 +13,7 @@ def get_today_actions(user_id):
     user_actions = []
     csv_dir = os.path.join("test_files", "csv")
     file_path = os.path.join(csv_dir, "employ6.csv")
+
 
     with open(file_path) as csv_file:
         csv_reader = csv.DictReader(csv_file)
