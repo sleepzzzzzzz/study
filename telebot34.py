@@ -1,18 +1,16 @@
 import os
 import csv
-import telebot
-from telebot import types
+import sqlite3
 from datetime import datetime
 
-API_TOKEN = ""
+from bl.add_actions import get_action
+from bl.constants import DATE_FORMAT
+from bl.get_actions import get_today_actions
+from bl.registration import get_name
+from bl.users_dict import users
+from bl.yes_no import render_yes_now_keyboard, render_initial_keyboard, remove_initial_keyboard
 
-bot = telebot.TeleBot(API_TOKEN)
-DATE_FORMAT = "%d.%m.%Y"
-users = {}
-
-
-def is_valid_name_surname_action(name_surname_action):
-    return not (" " in name_surname_action or len(name_surname_action) < 2)
+from bot import bot
 
 
 @bot.message_handler(content_types=["text"])
@@ -39,35 +37,40 @@ def start(message):
 def callback_worker2(call):
     user_id = call.from_user.id
     if call.data == "plan_yes":
+        actions = get_today_actions(user_id)
+        bot.send_message(user_id, actions)
+        render_initial_keyboard(user_id)
         now = datetime.now()
-        wnow = now.strftime("%d.%m.%Y")
-        user_actions = []
-        csv_dir = os.path.join("test_files", "csv")
-        file_path = os.path.join(csv_dir, "employ6.csv")
+        wnow = now.strftime(DATE_FORMAT)
+        db_file = "actionss.db"
+        try:
+            sqlite_connection = sqlite3.connect(db_file)
+            cursor = sqlite_connection.cursor()
+            print("База данных создана и успешно подключена к SQLite")
 
-        with open(file_path) as csv_file:
-            csv_reader = csv.DictReader(csv_file)
-            for row in csv_reader:
-                if not row["id"] == str(user_id):
-                    continue
-                actdate = row["date"]
-                actdatee = datetime.strptime(actdate, "%d.%m.%Y")
-                actiondate = actdatee.strftime("%d.%m.%Y")
-                if wnow == actiondate:
-                    user_actions.append(row["action"])
+            sqlite_select_query = "SELECT sqlite_version();"
+            cursor.execute(sqlite_select_query)
+            record = cursor.fetchall()
+            print("Версия базы данных SQLite: ", record)
 
-        if not user_actions:
+        except sqlite3.Error as error:
+            print("Ошибка при подключении к sqlite", error)
+            raise
+        now = datetime.now()
 
-            bot.send_message(user_id, "На сегодня планов нет!")
+        today = now.date()
 
-        else:
-            enumerated_actions = []
-            for index, action in enumerate(user_actions, start=1):
-                enumerated_actions.append(f'{index}. {action};')
-            message = "Привет,твои задачи на сегодня: \n"
-            actions = "\n".join(enumerated_actions)
-            bot.send_message(user_id, f'{message}{actions}')
-            render_initial_keyboard(user_id)
+        command = """
+            SELECT todos FROM "tods"
+            WHERE DATE(dates) = ?;
+            """
+
+        with sqlite3.connect(db_file) as conn:
+            cur = conn.cursor()
+            result = cur.execute(command, [today])
+            res=''.join([i[0] for i in result])
+
+            bot.send_message(user_id, f'ваши планы на сегодня - {res}')
 
     elif call.data == "plan_no":
         # remove user
@@ -75,99 +78,51 @@ def callback_worker2(call):
         render_initial_keyboard(user_id)
 
 
-def get_action(message):
-    user_id = message.from_user.id
-    action = message.text
-    if is_valid_name_surname_action(action):
-        users[user_id]["action"] = action.title()
-        bot.send_message(user_id, "на какую дату планируем?")
-        bot.register_next_step_handler(message, get_date)
-
-    else:
-        bot.send_message(user_id, "Введите корректное действие")
-        bot.register_next_step_handler(message, get_action)
-
-
-def get_date(message):
-    user_id = message.from_user.id
-
-    today = datetime.now()
-
-    try:
-        date = datetime.strptime(message.text, "%d.%m.%Y")
-
-        ftoday = today.strftime("%d.%m.%Y")
-        formtoday = datetime.strptime(ftoday, "%d.%m.%Y")
-
-    except(ValueError, TypeError):
-        bot.send_message(user_id, "Введите корректную дату")
-        bot.register_next_step_handler(message, get_date)
-
-    if date >= formtoday:
-        fdate = date.strftime("%d.%m.%Y")
-        action = users[user_id]["action"]
-        users[user_id]["date"] = fdate
-
-        question = f"Ты бы хотел запланировать это действие {action} на эту дату {fdate}?"
-        render_yes_now_keyboard(user_id, question, "regg")
-
-    else:
-        bot.send_message(user_id, "Введите корректную дату")
-        bot.register_next_step_handler(message, get_date)
-
-
-def get_name(message):
-    user_id = message.from_user.id
-    name = message.text.title()
-    if is_valid_name_surname_action(name):
-        users[user_id]["name"] = name.title()
-        bot.send_message(user_id, "Какая у тебя фамилия?")
-        bot.register_next_step_handler(message, get_surname)
-
-    else:
-        bot.send_message(user_id, "Введите корректное имя")
-        bot.register_next_step_handler(message, get_name)
-
-
-def get_surname(message):
-    surname = message.text
-    user_id = message.from_user.id
-    if is_valid_name_surname_action(surname):
-        users[user_id]["surname"] = surname.title()
-        bot.send_message(user_id, "Сколько тебе лет?")
-        bot.register_next_step_handler(message, get_age)
-    else:
-        bot.send_message(user_id, "Введите корректную фамилию")
-        bot.register_next_step_handler(message, get_surname)
-
-
-def get_age(message):
-    age_text = message.text
-    user_id = message.from_user.id
-    if age_text.isdigit():
-        age = int(age_text)
-        if not 10 <= age <= 100:
-            bot.send_message(user_id, "Введите реальный возраст, пожалуйста")
-            bot.register_next_step_handler(message, get_age)
-        else:
-            users[user_id]["age"] = int(age)
-            name = users[user_id]["name"]
-            surname = users[user_id]["surname"]
-            question = f"Тебе {age} лет и тебя зовут {name} {surname}?"
-            render_yes_now_keyboard(user_id, question, "reg")
-    else:
-        bot.send_message(user_id, "Введите цифрами, пожалуйста")
-        bot.register_next_step_handler(message, get_age)
-
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith("reg_"))
 def callback_worker(call):
     user_id = call.from_user.id
     if call.data == "reg_yes":
+        db_file = "reg.db"
+
+        try:
+            sqlite_connection = sqlite3.connect(db_file)
+            cursor = sqlite_connection.cursor()
+            print("База данных создана и успешно подключена к SQLite")
+
+            sqlite_select_query = "SELECT sqlite_version();"
+            cursor.execute(sqlite_select_query)
+            record = cursor.fetchall()
+            print("Версия базы данных SQLite: ", record)
+
+        except sqlite3.Error as error:
+            print("Ошибка при подключении к sqlite", error)
+            raise
+
+        command = """
+                            CREATE TABLE IF NOT EXISTS "user"(
+                                id INTEGER PRIMARY KEY,
+                                first_name VARCHAR(255) UNIQUE NOT NULL,
+                                surname VARCHAR(255) UNIQUE NOT NULL,
+                                age INTEGER
+                            );
+                        """
+
+        cursor.execute(command)
+
+        com = """
+            INSERT OR REPLACE  INTO "user"(id, first_name, surname,age)
+            VALUES (:id,:1n,:sur,:age);
+        """
+        cursor.execute(com,{ "id":user_id, "1n":users[user_id]["name"] , "sur":users[user_id]["surname"],"age":users[user_id]["age"]})
+
+                            
+
+        # изменения нужно закоммитить
+        sqlite_connection.commit()
         bot.send_message(user_id, "Спасибо, я запомню!")
         # pretend that we save in database
         csv_dir = os.path.join("test_files", "csv")
-        file_path = os.path.join(csv_dir, "employ6.csv")
+        file_path = os.path.join(csv_dir, "employ7.csv")
         first_id = not os.path.exists(csv_dir)
         if not os.path.exists(csv_dir):
             os.makedirs(csv_dir)
@@ -178,11 +133,12 @@ def callback_worker(call):
             # записываем заголовок
             if first_id:
                 writer.writeheader()
-            writer.writerow({"id": user_id, "name": users[user_id]["name"], "surname": users[user_id]["surname"],
-                             "age": users[user_id]["age"]})
+            writer.writerow({"id": user_id, "name": users[user_id]["name"], "surname": users[user_id]["surname"], "age" : users[user_id]["age"]})
 
         with open(file_path) as f:
             print(f.read())
+
+
     elif call.data == "reg_no":
         # remove user
         users.pop(user_id, None)
@@ -193,6 +149,40 @@ def callback_worker(call):
 def callback_worker1(call):
     user_id = call.from_user.id
     if call.data == "regg_yes":
+        db_file = "actionss.db"
+
+        try:
+            sqlite_connection = sqlite3.connect(db_file)
+            cursor = sqlite_connection.cursor()
+            print("База данных создана и успешно подключена к SQLite")
+
+            sqlite_select_query = "SELECT sqlite_version();"
+            cursor.execute(sqlite_select_query)
+            record = cursor.fetchall()
+            print("Версия базы данных SQLite: ", record)
+
+        except sqlite3.Error as error:
+            print("Ошибка при подключении к sqlite", error)
+            raise
+
+        command = """
+                                    CREATE TABLE IF NOT EXISTS "tods"(
+                                        id INTEGER PRIMARY KEY,
+                                        todos VARCHAR(255)  NOT NULL,
+                                        dates DATETIME   NOT NULL
+                                        
+                                    );
+                                """
+
+        cursor.execute(command)
+
+        command = """
+                    INSERT OR REPLACE  INTO "tods"(id,todos,dates)
+                    VALUES (:id,:act,:dt);
+                """
+        cursor.execute(command, {"id": user_id, "act": users[user_id]["action"], "dt": users[user_id]["date"]})
+        sqlite_connection.commit()
+
         bot.send_message(user_id, "Спасибо, я запомню!")
         # pretend that we save in database
         csv_dir = os.path.join("test_files", "csv")
@@ -213,29 +203,6 @@ def callback_worker1(call):
     elif call.data == "regg_no":
         users.pop(user_id, None)
         render_initial_keyboard(user_id)
-
-
-def render_yes_now_keyboard(user_id: int, question: str, prefix: str):
-    keyboard = types.InlineKeyboardMarkup()
-    key_yes = types.InlineKeyboardButton(text="Да", callback_data=f"{prefix}_yes")
-    keyboard.add(key_yes)
-    key_no = types.InlineKeyboardButton(text="Нет", callback_data=f"{prefix}_no")
-    keyboard.add(key_no)
-    bot.send_message(user_id, text=question, reply_markup=keyboard)
-
-
-def render_initial_keyboard(user_id: int):
-    keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
-    register_button = types.KeyboardButton("Регистрация")
-    todo_button = types.KeyboardButton("TODO")
-    plan_button = types.KeyboardButton("Планы сегодня")
-    keyboard.add(register_button, todo_button, plan_button)
-    bot.send_message(user_id, "Выберите действие", reply_markup=keyboard)
-
-
-def remove_initial_keyboard(user_id: int, message: str):
-    keyboard = types.ReplyKeyboardRemove()
-    bot.send_message(user_id, message, reply_markup=keyboard)
 
 
 if __name__ == "__main__":

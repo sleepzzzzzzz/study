@@ -5,6 +5,8 @@ from bot import bot
 
 
 
+
+
 def get_name(message):
     user_id = message.from_user.id
     name = message.text.title()
@@ -47,3 +49,7 @@ def get_age(message):
     else:
         bot.send_message(user_id, "Введите цифрами, пожалуйста")
         bot.register_next_step_handler(message, get_age)
+
+
+
+

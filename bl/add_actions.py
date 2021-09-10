@@ -29,7 +29,6 @@ def get_date(message):
 
     try:
         date = datetime.strptime(message.text, DATE_FORMAT)
-
         ftoday = today.strftime(DATE_FORMAT)
         formtoday = datetime.strptime(ftoday, DATE_FORMAT)
 
@@ -40,7 +39,7 @@ def get_date(message):
     if date >= formtoday:
         fdate = date.strftime("%d.%m.%Y")
         action = users[user_id]["action"]
-        users[user_id]["date"] = fdate
+        users[user_id]["date"] = date
 
         question = f"Ты бы хотел запланировать это действие {action} на эту дату {fdate}?"
         render_yes_now_keyboard(user_id, question, "regg")
