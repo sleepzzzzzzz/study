@@ -3,10 +3,15 @@ import csv
 import sqlite3
 from datetime import datetime
 
+from sqlalchemy.orm import sessionmaker
+
+
 from bl.add_actions import get_action
 from bl.constants import DATE_FORMAT
-from bl.get_actions import get_today_actions
+from bl.get_actions import get_today_actions, get_todo_orm
 from bl.registration import get_name
+from bl.sqlalchemy_reg import engine, Customer, Actions
+
 from bl.users_dict import users
 from bl.yes_no import render_yes_now_keyboard, render_initial_keyboard, remove_initial_keyboard
 
@@ -37,12 +42,10 @@ def start(message):
 def callback_worker2(call):
     user_id = call.from_user.id
     if call.data == "plan_yes":
-        actions = get_today_actions(user_id)
-        bot.send_message(user_id, actions)
+       # actions = get_today_actions(user_id)
+       # bot.send_message(user_id, actions)
         render_initial_keyboard(user_id)
-        now = datetime.now()
-        wnow = now.strftime(DATE_FORMAT)
-        db_file = "actionss.db"
+        db_file = "action.db"
         try:
             sqlite_connection = sqlite3.connect(db_file)
             cursor = sqlite_connection.cursor()
@@ -71,6 +74,15 @@ def callback_worker2(call):
             res=''.join([i[0] for i in result])
 
             bot.send_message(user_id, f'ваши планы на сегодня - {res}')
+
+
+
+
+        text_message = get_todo_orm(user_id, today)
+        if text_message:
+            bot.send_message(user_id, f" ваши планы на сегодня :" + text_message)
+
+
 
     elif call.data == "plan_no":
         # remove user
@@ -119,10 +131,20 @@ def callback_worker(call):
 
         # изменения нужно закоммитить
         sqlite_connection.commit()
+
+        Session = sessionmaker(engine)
+        # создаем сессию
+        with Session() as session:
+            session.add(Customer(id=user_id,
+                                 first_name=users[user_id]["name"],
+                                 surname=users[user_id]["surname"],
+                                 age=users[user_id]["age"]
+                                 ))
+            session.commit()
         bot.send_message(user_id, "Спасибо, я запомню!")
         # pretend that we save in database
-        csv_dir = os.path.join("test_files", "csv")
-        file_path = os.path.join(csv_dir, "employ7.csv")
+        csv_dir = os.path.join("test_fil", "csv")
+        file_path = os.path.join(csv_dir, "employ123.csv")
         first_id = not os.path.exists(csv_dir)
         if not os.path.exists(csv_dir):
             os.makedirs(csv_dir)
@@ -149,7 +171,7 @@ def callback_worker(call):
 def callback_worker1(call):
     user_id = call.from_user.id
     if call.data == "regg_yes":
-        db_file = "actionss.db"
+        db_file = "action.db"
 
         try:
             sqlite_connection = sqlite3.connect(db_file)
@@ -176,6 +198,9 @@ def callback_worker1(call):
 
         cursor.execute(command)
 
+
+
+
         command = """
                     INSERT OR REPLACE  INTO "tods"(id,todos,dates)
                     VALUES (:id,:act,:dt);
@@ -186,10 +211,11 @@ def callback_worker1(call):
         bot.send_message(user_id, "Спасибо, я запомню!")
         # pretend that we save in database
         csv_dir = os.path.join("test_files", "csv")
-        file_path = os.path.join(csv_dir, "employ6.csv")
+        file_path = os.path.join(csv_dir, "employee.csv")
         first_id = not os.path.exists(csv_dir)
         if not os.path.exists(csv_dir):
             os.makedirs(csv_dir)
+
 
         with open(file_path, "a") as csv_file:
             names1 = ["id", "action", "date"]
@@ -200,6 +226,13 @@ def callback_worker1(call):
 
         with open(file_path) as f:
             print(f.read())
+        Session = sessionmaker(engine)
+        # создаем сессию
+        with Session() as session:
+            session.add(Actions(user_id=user_id
+                                , action=users[user_id]["action"]
+                                , date_action=users[user_id]["date"]))
+            session.commit()
     elif call.data == "regg_no":
         users.pop(user_id, None)
         render_initial_keyboard(user_id)
